@@ -25,6 +25,7 @@ public class CrptApi {
     private final TimeUnit timeUnit;
     private final int requestLimit;
     private final ScheduledExecutorService scheduler;
+    private final Semaphore semaphore;
 
     /**
      * Константа url запроса POST
@@ -42,6 +43,7 @@ public class CrptApi {
         this.timeUnit = timeUnit;
         this.requestLimit = requestLimit;
         this.scheduler = Executors.newScheduledThreadPool(1);
+        this.semaphore = new Semaphore(requestLimit);
     }
 
     /**
@@ -51,8 +53,6 @@ public class CrptApi {
      * @param signature - подпись
      */
     public void createNewDocument(Document document, String signature) throws InterruptedException {
-
-        Semaphore semaphore = new Semaphore(requestLimit);
         semaphore.acquire();
 
         scheduler.scheduleAtFixedRate(semaphore::release, 1, 1, timeUnit);
@@ -91,8 +91,11 @@ public class CrptApi {
     /**
      * Вызов метода {@link CrptApi#createNewDocument(Document, String)}
      */
-    public static void main(String[] args) throws InterruptedException {
-        CrptApi crptApi = new CrptApi(TimeUnit.SECONDS, 5);
+    public static void main(String[] args) {
+
+        ExecutorService threadPool = Executors.newFixedThreadPool(10);
+
+        CrptApi crptApi = new CrptApi(TimeUnit.MINUTES, 5);
         Document document;
 
         try {
@@ -102,8 +105,23 @@ public class CrptApi {
             throw new RuntimeException(e);
         }
 
-        crptApi.createNewDocument(document, "Roman");
-        crptApi.shutdown();
+        for (int i = 0; i < 10; i++) {
+
+
+            int finalI = i;
+            threadPool.submit(() -> {
+                try {
+
+
+                    System.out.println("i = " + finalI);
+                    crptApi.createNewDocument(document, "Roman");
+                    crptApi.shutdown();
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+            });
+        }
+        threadPool.shutdown();
 
     }
 
